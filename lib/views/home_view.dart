@@ -1,13 +1,11 @@
+import 'dart:convert';
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart';
+import 'package:weather_app/constants/texts/app_text.dart';
 import 'package:weather_app/views/search_view.dart';
-
-class Adam {
-  String name = 'Timur';
-  int age = 123;
-}
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -16,36 +14,84 @@ class HomeView extends StatefulWidget {
   State<HomeView> createState() => _HomeViewState();
 }
 
-String? name;
-List<String> names = [
-  'Kubat',
-];
-Set<String> name1 = {''};
-Map<String, String> map = {'': ''};
-
 class _HomeViewState extends State<HomeView> {
+  String cityName = '';
+
+  dynamic temp;
+
+  String country = '';
+  bool isLoading = true;
+
   @override
   void initState() {
     showWeather();
+
     super.initState();
   }
 
-  Future<void> showWeather() async {
+  void showWeather() async {
     final position = await getPosition();
-    log('Position latitude ===> ${position.latitude}');
-    log('Position longitude ===> ${position.longitude}');
+    log('position latitude ====> ${position.latitude}');
+    log('position longitude ====> ${position.longitude}');
+    getCurrentWeatherHttp(position: position);
+  }
+
+  Future<void> getCurrentWeatherHttp({Position? position}) async {
+    final client = Client();
+    final url =
+        'https://api.openweathermap.org/data/2.5/weather?lat=${position!.latitude}&lon=${position!.longitude}&appid=${AppText.myApiKey}';
+    final uri = Uri.parse(url);
+    try {
+      final joop = await client.get(uri);
+      if (joop.statusCode == 200 || joop.statusCode == 201) {
+        final data = joop.body;
+        final jsonData = jsonDecode(data);
+        cityName = jsonData['name'];
+        country = jsonData['sys']['country'];
+        final double kelvin = jsonData['main']['temp'];
+        temp = (kelvin - 273.15).toStringAsFixed(0);
+        log('kelvin ===> $kelvin');
+        log('temp ===> ${temp.toString()}');
+      }
+
+      log('Cityname  ====> ${cityName}');
+      setState(() {});
+      isLoading = false;
+    } catch (e) {
+      log('===>  $e');
+    }
+  }
+
+  Future<void> getTypedCityName({String? cityNamediBer}) async {
+    isLoading = true;
+    try {
+      final client = Client();
+      final String apiUrl =
+          'https://api.openweathermap.org/data/2.5/weather?q=${cityNamediBer!}&appid=${AppText.myApiKey}';
+
+      final uri = Uri.parse(apiUrl);
+      final joop = await client.get(uri);
+      if (joop.statusCode == 200 || joop.statusCode == 201) {
+        final data = joop.body;
+        final jsonData = jsonDecode(data);
+        cityName = jsonData['name'];
+        country = jsonData['sys']['country'];
+        final double kelvin = jsonData['main']['temp'];
+        temp = (kelvin - 273.15).toStringAsFixed(0);
+        log('kelvin ===> $kelvin');
+        log('temp ===> ${temp.toString()}');
+        isLoading = false;
+        setState(() {});
+      }
+    } catch (e) {}
   }
 
   Future<Position> getPosition() async {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Test if location services are enabled.
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Location services are not enabled don't continue
-      // accessing the position and request users of the
-      // App to enable the location services.
       return Future.error('Location services are disabled.');
     }
 
@@ -53,12 +99,7 @@ class _HomeViewState extends State<HomeView> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Permissions are denied, next time you could try
-        // requesting permissions again (this is also where
-        // Android's shouldShowRequestPermissionRationale
-        // returned true. According to Android guidelines
-        // your App should show an explanatory UI now.
-        return Future.error('Location permissions are denied');
+        return Future.error('kata bolup atat');
       }
     }
 
@@ -81,20 +122,27 @@ class _HomeViewState extends State<HomeView> {
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.transparent,
-          leading: Icon(
-            Icons.near_me,
-            size: 40,
+          leading: InkWell(
+            onTap: () {
+              showWeather();
+            },
+            child: Icon(
+              Icons.near_me,
+              size: 40,
+            ),
           ),
           actions: [
             IconButton(
-                onPressed: () {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => SearchView()));
-                },
-                icon: Icon(
-                  Icons.location_city,
-                  size: 40,
-                ))
+              onPressed: () async {
+                var result = await Navigator.push(context,
+                    MaterialPageRoute(builder: (context) => SearchView()));
+                getTypedCityName(cityNamediBer: result);
+              },
+              icon: Icon(
+                Icons.location_city,
+                size: 40,
+              ),
+            )
           ],
         ),
         body: Container(
@@ -106,65 +154,67 @@ class _HomeViewState extends State<HomeView> {
               fit: BoxFit.cover,
             ),
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                top: 90,
-                left: 40,
-                child: Text(
-                  '8°C',
-                  style: TextStyle(
-                    fontSize: 75,
-                    color: Colors.white,
-                  ),
+          child: isLoading == true
+              ? Center(child: CircularProgressIndicator())
+              : Stack(
+                  children: [
+                    Positioned(
+                      top: 90,
+                      left: 40,
+                      child: Text(
+                        '$temp°C',
+                        style: TextStyle(
+                          fontSize: 75,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 20,
+                      left: 40,
+                      child: Text(
+                        'Country: $country',
+                        style: TextStyle(
+                          fontSize: 45,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 60,
+                      left: 190,
+                      child: Text(
+                        ' ⛅',
+                        style: TextStyle(
+                          fontSize: 75,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 220,
+                      left: 100,
+                      right: 0,
+                      child: Text(
+                        'Jiluu \n kiyinip 👕   \n chyk',
+                        style: TextStyle(
+                          fontSize: 55,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Text(
+                        '$cityName',
+                        style: TextStyle(
+                          fontSize: 55,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Positioned(
-                top: 60,
-                left: 150,
-                child: Text(
-                  ' ⛅',
-                  style: TextStyle(
-                    fontSize: 75,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 60,
-                left: 150,
-                child: Text(
-                  ' ⛅',
-                  style: TextStyle(
-                    fontSize: 75,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 220,
-                left: 100,
-                right: 0,
-                child: Text(
-                  'Jiluu \n kiyinip 👕   \n chyk',
-                  style: TextStyle(
-                    fontSize: 55,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Text(
-                  'Bishkek',
-                  style: TextStyle(
-                    fontSize: 55,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
